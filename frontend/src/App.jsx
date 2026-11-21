@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import Header from './companents/Header.jsx'
-import WeekCalendar from './companents/WeekCalendar.jsx'
-import TaskModal from './companents/TaskModal.jsx'
+import Header from './components/Header.jsx'
+import WeekCalendar from './components/WeekCalendar.jsx'
+import TaskModal from './components/TaskModal.jsx'
 
 const dateKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const startOfWeek = value => { const d = new Date(value); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d }
@@ -42,7 +42,8 @@ export default function App() {
   }
   const deleteTask = async id => {
     const response = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
-    if (response.ok) setTasks(prev => prev.filter(t => t.id !== id))
+    if (!response.ok) throw Error('Не удалось удалить задачу.')
+    setTasks(prev => prev.filter(t => t.id !== id))
   }
   const moveTask = async (task, date) => {
     const old = new Date(task.startAt)
@@ -53,7 +54,7 @@ export default function App() {
   return <main className="planner">
     <Header anchor={anchor} onAdd={() => { setError(''); setEditingTask(null); setModal(true) }} onPrevious={() => changeWeek(-1)} onNext={() => changeWeek(1)} />
     {error && <p className="connection-error">{error}</p>}
-    <WeekCalendar days={days} tasks={tasks} onToggle={toggleTask} onDelete={deleteTask} onEdit={task => { setEditingTask(task); setModal(true) }} onMove={moveTask} />
-    {modal && <TaskModal task={editingTask} initialDate={dateKey(today >= anchor && today <= days[6] ? today : anchor)} onClose={() => { setModal(false); setEditingTask(null) }} onSave={saveTask} />}
+    <WeekCalendar days={days} tasks={tasks} onToggle={toggleTask} onEdit={task => { setEditingTask(task); setModal(true) }} onMove={moveTask} />
+    {modal && <TaskModal task={editingTask} initialDate={dateKey(today >= anchor && today <= days[6] ? today : anchor)} onClose={() => { setModal(false); setEditingTask(null) }} onDelete={async id => { await deleteTask(id); setModal(false); setEditingTask(null) }} onSave={saveTask} />}
   </main>
 }

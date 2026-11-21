@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Droplet, Expand, ListTodo, MoreVertical, RotateCcw } from 'lucide-react'
+import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Droplet, Expand, ListTodo, MoreVertical, RotateCcw, Trash2 } from 'lucide-react'
 import './TaskModal.css'
 import './TaskPalette.css'
+import './TaskModalExtra.css'
 
 const keyOf = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
@@ -13,12 +14,13 @@ const displayTime = value => {
   return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
 }
 
-export default function TaskModal({ task, initialDate, onClose, onSave }) {
+export default function TaskModal({ task, initialDate, onClose, onDelete, onSave }) {
   const initial = task ? new Date(task.startAt) : null
   const [form, setForm] = useState({ title: task?.title || '', description: task?.description || '', date: initial ? keyOf(initial) : initialDate, time: initial ? `${String(initial.getHours()).padStart(2, '0')}:${String(initial.getMinutes()).padStart(2, '0')}` : '09:00', color: task?.color || '#ffffff' })
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [picker, setPicker] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
   const [visibleMonth, setVisibleMonth] = useState(() => { const d = new Date(`${form.date}T12:00:00`); return new Date(d.getFullYear(), d.getMonth(), 1) })
   const calendarDays = useMemo(() => {
     const first = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1)
@@ -35,8 +37,15 @@ export default function TaskModal({ task, initialDate, onClose, onSave }) {
     try { await onSave(form) } catch (e) { setError(e.message || 'Не удалось сохранить задачу.') }
   }
   const chooseDate = day => { update('date', keyOf(day)); setPicker('') }
+  const dismiss = async () => {
+    if (form.title.trim() || form.description.trim()) {
+      try { await onSave({ ...form, title: form.title.trim() || 'Без названия' }) } catch (e) { setError(e.message || 'Не удалось сохранить задачу.') }
+      return
+    }
+    onClose()
+  }
 
-  return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && onClose()}>
+  return <div className="overlay" onMouseDown={e => e.target === e.currentTarget && dismiss()}>
     <form className={`note-modal ${expanded ? 'expanded' : ''}`} style={{ '--note-color': form.color }} onSubmit={submit}>
       <div className="note-topline">
         <div className="date-time-controls">
@@ -59,8 +68,12 @@ export default function TaskModal({ task, initialDate, onClose, onSave }) {
         <button type="button" title="Сбросить время" onClick={() => update('time', '09:00')}><RotateCcw size={18}/></button>
         <button type="button" className={picker === 'color' ? 'tool-active' : ''} title="Цвет задачи" onClick={() => setPicker(picker === 'color' ? '' : 'color')}><Droplet size={18}/></button>
         <button type="submit" title="Сохранить"><CheckCircle2 size={18}/></button>
-        <button type="button" title="Дополнительное место для заметки" onClick={() => setExpanded(!expanded)}><MoreVertical size={18}/></button>
+        <button type="button" title="Дополнительные действия" className={menuOpen ? 'tool-active' : ''} onClick={() => setMenuOpen(!menuOpen)}><MoreVertical size={18}/></button>
       </div>
+      {menuOpen && <div className="task-menu">
+        <button type="button" onClick={() => { setExpanded(true); setMenuOpen(false) }}><ArrowRight size={16}/> Развернуть задачу</button>
+        {task && <button type="button" className="delete-action" onClick={() => onDelete(task.id).catch(e => setError(e.message || 'Не удалось удалить задачу.'))}><Trash2 size={16}/> Удалить</button>}
+      </div>}
     </form>
   </div>
 }
