@@ -1,22 +1,15 @@
 import { useMemo, useState } from 'react'
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Droplet, Expand, ListTodo, MoreVertical, RotateCcw, Trash2 } from 'lucide-react'
-import './TaskModal.css'
-import './TaskPalette.css'
-import './TaskModalExtra.css'
+import { dateKey } from '../utils/date.js'
+import { displayTime, timeChoices } from '../utils/time.js'
 
-const keyOf = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 const monthLabel = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
 const monthShort = new Intl.DateTimeFormat('ru-RU', { month: 'short' })
-const timeChoices = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`)
 const colors = ['#d52d58', '#ffeb4d', '#aeb8ff', '#9de8d4', '#f0a8d8', '#ffd0a5', '#ffffff']
-const displayTime = value => {
-  const [hour, minute] = value.split(':').map(Number)
-  return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
-}
 
 export default function TaskModal({ task, initialDate, onClose, onDelete, onSave }) {
   const initial = task ? new Date(task.startAt) : null
-  const [form, setForm] = useState({ title: task?.title || '', description: task?.description || '', date: initial ? keyOf(initial) : initialDate, time: initial ? `${String(initial.getHours()).padStart(2, '0')}:${String(initial.getMinutes()).padStart(2, '0')}` : '09:00', color: task?.color || '#ffffff' })
+  const [form, setForm] = useState({ title: task?.title || '', description: task?.description || '', date: initial ? dateKey(initial) : initialDate, time: initial ? `${String(initial.getHours()).padStart(2, '0')}:${String(initial.getMinutes()).padStart(2, '0')}` : '09:00', color: task?.color || '#ffffff' })
   const [error, setError] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [picker, setPicker] = useState('')
@@ -30,13 +23,13 @@ export default function TaskModal({ task, initialDate, onClose, onDelete, onSave
   }, [visibleMonth])
   const selectedDate = new Date(`${form.date}T12:00:00`)
   const today = new Date()
-  const dateText = `${form.date === keyOf(today) ? 'Сегодня, ' : ''}${monthShort.format(selectedDate)} ${selectedDate.getDate()}`
+  const dateText = `${form.date === dateKey(today) ? 'Сегодня, ' : ''}${monthShort.format(selectedDate)} ${selectedDate.getDate()}`
   const update = (name, value) => setForm(prev => ({ ...prev, [name]: value }))
   const submit = async event => {
     event.preventDefault()
     try { await onSave(form) } catch (e) { setError(e.message || 'Не удалось сохранить задачу.') }
   }
-  const chooseDate = day => { update('date', keyOf(day)); setPicker('') }
+  const chooseDate = day => { update('date', dateKey(day)); setPicker('') }
   const dismiss = async () => {
     if (form.title.trim() || form.description.trim()) {
       try { await onSave({ ...form, title: form.title.trim() || 'Без названия' }) } catch (e) { setError(e.message || 'Не удалось сохранить задачу.') }
@@ -56,7 +49,7 @@ export default function TaskModal({ task, initialDate, onClose, onDelete, onSave
       </div>
       {picker === 'date' && <div className="date-popover">
         <div className="calendar-popover-head"><button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}><ChevronLeft size={16}/></button><strong>{monthLabel.format(visibleMonth).replace(/\s*г\./, '')}</strong><button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}><ChevronRight size={16}/></button></div>
-        <div className="calendar-popover-grid">{['П','В','С','Ч','П','С','В'].map((d,i)=><span className="weekday" key={`${d}-${i}`}>{d}</span>)}{calendarDays.map(day=><button type="button" key={keyOf(day)} className={`${day.getMonth() !== visibleMonth.getMonth() ? 'other-month' : ''} ${keyOf(day) === form.date ? 'chosen' : ''}`} onClick={() => chooseDate(day)}>{day.getDate()}</button>)}</div>
+        <div className="calendar-popover-grid">{['П','В','С','Ч','П','С','В'].map((d,i)=><span className="weekday" key={`${d}-${i}`}>{d}</span>)}{calendarDays.map(day=><button type="button" key={dateKey(day)} className={`${day.getMonth() !== visibleMonth.getMonth() ? 'other-month' : ''} ${dateKey(day) === form.date ? 'chosen' : ''}`} onClick={() => chooseDate(day)}>{day.getDate()}</button>)}</div>
       </div>}
       {picker === 'time' && <div className="time-popover">{timeChoices.map(time=><button type="button" key={time} className={form.time === time ? 'chosen' : ''} onClick={() => { update('time', time); setPicker('') }}>{displayTime(time)}</button>)}</div>}
       {picker === 'color' && <div className="color-popover">{colors.map(color=><button type="button" key={color} className={form.color === color ? 'selected' : ''} style={{ '--swatch-color': color }} onClick={() => update('color', color)} aria-label={`Выбрать цвет ${color}`} />)}</div>}

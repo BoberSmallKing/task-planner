@@ -1,7 +1,6 @@
 import { Check } from 'lucide-react'
-import './WeekCalendar.css'
+import { dateKey } from '../utils/date.js'
 
-const dateKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const dayName = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' })
 const monthName = new Intl.DateTimeFormat('ru-RU', { month: 'short' })
 

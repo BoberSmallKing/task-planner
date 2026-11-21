@@ -20,8 +20,6 @@ npm install
 npm run dev
 ```
 
-Откройте адрес Vite (обычно `http://localhost:5173`). Для production сборки используйте `npm run build`.
-
 ## API
 
 - `GET /api/tasks` — список задач
