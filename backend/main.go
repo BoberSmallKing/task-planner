@@ -25,6 +25,7 @@ import (
 type Task struct {
 	ID          int64     `json:"id"`
 	UserID      int64     `json:"userId"`
+	CalendarID  int64     `json:"calendarId"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	StartAt     time.Time `json:"startAt"`
@@ -126,6 +127,37 @@ func main() {
 			panic(err)
 		}
 	}
+	for _, column := range []struct{ name, declaration string }{{"calendar_id", "INTEGER NOT NULL DEFAULT 0"}, {"created_by", "INTEGER NOT NULL DEFAULT 0"}} {
+		columns, err = db.Query(`PRAGMA table_info(tasks)`)
+		if err != nil {
+			panic(err)
+		}
+		found := false
+		for columns.Next() {
+			var cid, notnull, pk int
+			var name, typ string
+			var def any
+			if err := columns.Scan(&cid, &name, &typ, &notnull, &def, &pk); err != nil {
+				columns.Close()
+				panic(err)
+			}
+			if name == column.name {
+				found = true
+			}
+		}
+		columns.Close()
+		if !found {
+			if _, err := db.Exec(`ALTER TABLE tasks ADD COLUMN ` + column.name + ` ` + column.declaration); err != nil {
+				panic(err)
+			}
+		}
+	}
+	if _, err := db.Exec(`UPDATE tasks SET calendar_id=user_id WHERE calendar_id=0`); err != nil {
+		panic(err)
+	}
+	if _, err := db.Exec(`UPDATE tasks SET created_by=user_id WHERE created_by=0`); err != nil {
+		panic(err)
+	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		login TEXT NOT NULL UNIQUE,
@@ -143,11 +175,22 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS calendar_members (
+		owner_id INTEGER NOT NULL REFERENCES users(id),
+		member_id INTEGER NOT NULL REFERENCES users(id),
+		permission TEXT NOT NULL CHECK(permission IN ('read','edit')),
+		status TEXT NOT NULL CHECK(status IN ('pending','accepted')),
+		created_at TEXT NOT NULL,
+		PRIMARY KEY(owner_id,member_id)
+	)`)
+	if err != nil {
+		panic(err)
+	}
 
 	r := gin.Default()
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Calendar-ID")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -299,8 +342,19 @@ func main() {
 	})
 	tasksAPI := r.Group("/api/tasks")
 	tasksAPI.Use(authMiddleware(db, []byte(secret)))
+	registerCalendarRoutes(r, db, []byte(secret))
 	tasksAPI.GET("", func(c *gin.Context) {
-		rows, err := db.Query(`SELECT id,user_id,title,description,start_at,done,created_at,color FROM tasks WHERE user_id=? ORDER BY start_at`, c.GetInt64("userID"))
+		userID := c.GetInt64("userID")
+		calendarID, err := requestedCalendarID(c, userID)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Некорректный календарь"})
+			return
+		}
+		if _, ok := calendarPermission(db, userID, calendarID); !ok {
+			c.JSON(403, gin.H{"error": "Нет доступа к этому календарю"})
+			return
+		}
+		rows, err := db.Query(`SELECT id,created_by,calendar_id,title,description,start_at,done,created_at,color FROM tasks WHERE calendar_id=? ORDER BY start_at`, calendarID)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Не удалось загрузить задачи"})
 			return
@@ -311,7 +365,7 @@ func main() {
 			var t Task
 			var start, created string
 			var done int
-			if err := rows.Scan(&t.ID, &t.UserID, &t.Title, &t.Description, &start, &done, &created, &t.Color); err != nil {
+			if err := rows.Scan(&t.ID, &t.UserID, &t.CalendarID, &t.Title, &t.Description, &start, &done, &created, &t.Color); err != nil {
 				c.JSON(500, gin.H{"error": "Ошибка чтения задачи"})
 				return
 			}
@@ -333,19 +387,49 @@ func main() {
 			c.JSON(400, gin.H{"error": "Укажите название и дату задачи"})
 			return
 		}
+		userID := c.GetInt64("userID")
+		calendarID, err := requestedCalendarID(c, userID)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Некорректный календарь"})
+			return
+		}
+		permission, ok := calendarPermission(db, userID, calendarID)
+		if !ok {
+			c.JSON(403, gin.H{"error": "Нет доступа к этому календарю"})
+			return
+		}
+		if permission == "read" {
+			c.JSON(403, gin.H{"error": "У вас есть только доступ для чтения"})
+			return
+		}
 		now := time.Now().UTC()
 		if input.Color == "" {
 			input.Color = "#ffffff"
 		}
-		res, err := db.Exec(`INSERT INTO tasks(user_id,title,description,start_at,created_at,color) VALUES(?,?,?,?,?,?)`, c.GetInt64("userID"), input.Title, input.Description, input.StartAt.Format(time.RFC3339), now.Format(time.RFC3339), input.Color)
+		res, err := db.Exec(`INSERT INTO tasks(user_id,calendar_id,created_by,title,description,start_at,created_at,color) VALUES(?,?,?,?,?,?,?,?)`, userID, calendarID, userID, input.Title, input.Description, input.StartAt.Format(time.RFC3339), now.Format(time.RFC3339), input.Color)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Не удалось сохранить задачу"})
 			return
 		}
 		id, _ := res.LastInsertId()
-		c.JSON(201, Task{ID: id, UserID: c.GetInt64("userID"), Title: input.Title, Description: input.Description, StartAt: input.StartAt, CreatedAt: now, Color: input.Color})
+		c.JSON(201, Task{ID: id, UserID: userID, CalendarID: calendarID, Title: input.Title, Description: input.Description, StartAt: input.StartAt, CreatedAt: now, Color: input.Color})
 	})
 	tasksAPI.PATCH("/:id", func(c *gin.Context) {
+		userID := c.GetInt64("userID")
+		calendarID, err := requestedCalendarID(c, userID)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Некорректный календарь"})
+			return
+		}
+		permission, ok := calendarPermission(db, userID, calendarID)
+		if !ok {
+			c.JSON(403, gin.H{"error": "Нет доступа к этому календарю"})
+			return
+		}
+		if permission == "read" {
+			c.JSON(403, gin.H{"error": "У вас есть только доступ для чтения"})
+			return
+		}
 		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		var input struct {
 			Done        *bool      `json:"done"`
@@ -361,7 +445,7 @@ func main() {
 		var current Task
 		var start, created string
 		var done int
-		err = db.QueryRow(`SELECT id,user_id,title,description,start_at,done,created_at,color FROM tasks WHERE id=? AND user_id=?`, id, c.GetInt64("userID")).Scan(&current.ID, &current.UserID, &current.Title, &current.Description, &start, &done, &created, &current.Color)
+		err = db.QueryRow(`SELECT id,created_by,calendar_id,title,description,start_at,done,created_at,color FROM tasks WHERE id=? AND calendar_id=?`, id, calendarID).Scan(&current.ID, &current.UserID, &current.CalendarID, &current.Title, &current.Description, &start, &done, &created, &current.Color)
 		if err == sql.ErrNoRows {
 			c.JSON(404, gin.H{"error": "Задача не найдена"})
 			return
@@ -387,7 +471,7 @@ func main() {
 		if input.Color != nil {
 			current.Color = *input.Color
 		}
-		res, err := db.Exec(`UPDATE tasks SET title=?,description=?,start_at=?,done=?,color=? WHERE id=? AND user_id=?`, current.Title, current.Description, current.StartAt.Format(time.RFC3339), current.Done, current.Color, id, c.GetInt64("userID"))
+		res, err := db.Exec(`UPDATE tasks SET title=?,description=?,start_at=?,done=?,color=? WHERE id=? AND calendar_id=?`, current.Title, current.Description, current.StartAt.Format(time.RFC3339), current.Done, current.Color, id, calendarID)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Не удалось обновить задачу"})
 			return
@@ -400,7 +484,22 @@ func main() {
 		c.Status(204)
 	})
 	tasksAPI.DELETE("/:id", func(c *gin.Context) {
-		res, err := db.Exec(`DELETE FROM tasks WHERE id=? AND user_id=?`, c.Param("id"), c.GetInt64("userID"))
+		userID := c.GetInt64("userID")
+		calendarID, err := requestedCalendarID(c, userID)
+		if err != nil {
+			c.JSON(400, gin.H{"error": "Некорректный календарь"})
+			return
+		}
+		permission, ok := calendarPermission(db, userID, calendarID)
+		if !ok {
+			c.JSON(403, gin.H{"error": "Нет доступа к этому календарю"})
+			return
+		}
+		if permission == "read" {
+			c.JSON(403, gin.H{"error": "У вас есть только доступ для чтения"})
+			return
+		}
+		res, err := db.Exec(`DELETE FROM tasks WHERE id=? AND calendar_id=?`, c.Param("id"), calendarID)
 		if err != nil {
 			c.JSON(500, gin.H{"error": "Не удалось удалить задачу"})
 			return
