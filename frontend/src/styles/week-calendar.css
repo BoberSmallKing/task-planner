@@ -1,1 +1,52 @@
-.task-row[draggable="true"]{cursor:pointer;background:var(--task-color,#fff)}.task-row[draggable="true"]:active{cursor:grabbing}.task-check{position:absolute;right:5px;top:50%;transform:translateY(-50%);margin:0;opacity:0;pointer-events:none;border:1px solid #111;background:#111;color:#fff;transition:opacity .12s}.task-row:hover .task-check,.task-row:focus-within .task-check{opacity:1;pointer-events:auto}.task-row.is-done .task-check{opacity:1;pointer-events:auto}.task-row.is-done .task-title{text-decoration:line-through;color:#858585}.task-content{flex:1}.task-row:hover .task-content{padding:0!important}.task-row:hover .task-delete{display:none!important}
+.task-row[draggable="true"] {
+  cursor: pointer;
+  background: #fff;
+}
+
+.task-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.task-row:hover {
+  border-bottom: 2px solid #050505;
+}
+
+.task-content {
+  flex: 1;
+  padding: 0 !important;
+}
+
+.task-title {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--task-color, #fff);
+  font-weight: 700;
+}
+
+.task-check {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  margin: 0;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  transition: opacity .12s;
+}
+
+.task-row:hover .task-check,
+.task-row:focus-within .task-check,
+.task-row.is-done .task-check {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.task-row.is-done .task-title {
+  color: #858585;
+  text-decoration: line-through;
+}

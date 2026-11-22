@@ -1,0 +1,124 @@
+.account-overlay {
+  animation: accountFadeIn .18s ease-out both;
+}
+
+.account-auth {
+  position: relative;
+  padding-top: 50px;
+  background: #faeae4;
+  animation: accountModalIn .24s cubic-bezier(.2,.75,.25,1) both;
+}
+
+.auth-heading {
+  position: absolute;
+  inset: 14px 14px auto;
+  height: 32px;
+}
+
+.auth-heading > button {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.auth-heading > button.auth-back {
+  right: auto;
+  left: 0;
+}
+
+.account-auth h2 {
+  margin: 0 0 23px;
+  text-align: center;
+  font-size: 25px;
+  letter-spacing: -.7px;
+}
+
+.login-mascot {
+  position: relative;
+  width: 56px;
+  height: 64px;
+  margin: 0 auto 13px;
+}
+
+.mascot-body {
+  position: absolute;
+  top: 0;
+  left: 4px;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #171717;
+}
+
+.mascot-eye {
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+  animation: mascotBlink 5.4s infinite;
+}
+
+.mascot-eye > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #171717;
+  transition: transform .18s ease-out;
+}
+
+.mascot-leg {
+  position: absolute;
+  top: 43px;
+  width: 9px;
+  height: 15px;
+  border-radius: 0 0 4px 4px;
+  background: #171717;
+}
+
+.mascot-leg.left { left: 15px; }
+.mascot-leg.right { right: 15px; }
+@keyframes mascotBlink {
+  0%, 42%, 44%, 100% { transform: scaleY(1); }
+  43% { transform: scaleY(.08); }
+}
+
+.auth-field {
+  margin-bottom: 12px;
+}
+
+.auth-field input {
+  height: 47px;
+  padding: 0 14px;
+  border-radius: 11px;
+  background: rgba(118, 87, 72, .12);
+  font-size: 14px;
+}
+
+.auth-submit {
+  border-radius: 999px;
+}
+
+.auth-login-value {
+  margin: -10px 0 14px;
+  color: #858585;
+  text-align: center;
+  font-size: 13px;
+}
+
+.account-panel {
+  animation: accountModalIn .2s ease-out both;
+}
+
+@keyframes accountFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes accountModalIn {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
